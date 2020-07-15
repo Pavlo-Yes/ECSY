@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>My Work</title>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+        }
+    </style>
+    <script type="module">
+        import {World, System, Component, TagComponent, Types} from "https://ecsy.io/build/ecsy.module.js";
+
+        const NUM_ELEMENTS = 40;
+        const SPEED_MULTIPLIER = 0.2;
+        const SHAPE_SIZE = 10;
+        const SHAPE_HALF_SIZE = SHAPE_SIZE / 2;
+
+        let canvas = document.querySelector("canvas")/*? canvas = 0*/;
+        let canvasWidth = canvas.width = window.innerWidth;
+        let canvasHeight = canvas.height = window.innerHeight;
+        let ctx = canvas.getContext("2d");
+
+        class Velocity extends Component {
+        }
+
+        Velocity.schema = {
+            x: {type: Types.Number},
+            y: {type: Types.Number}
+        };
+
+        class Position extends Component {
+            constructor(x, y) {
+                super();
+                this.x = x;
+                this.y = y;
+            }
+
+            getMousePosition(canvas, event) {
+                let rect = canvas.getBoundingClientRect();
+                this.x = event.clientX - rect.left;
+                this.y = event.clientY - rect.top;
+                console.log("Coordinate x: " + this.x, "Coordinate y: " + this.y);
+            }
+        }
+
+        Position.schema = {
+            x: {type: Types.Number},
+            y: {type: Types.Number}
+        };
+
+        class Shape extends Component {
+        }
+
+        Shape.schema = {
+            primitive: {type: Types.String, default: 'box'}
+        };
+
+        class Renderable extends TagComponent {
+        }
+
+        class MovableSystem extends System {
+            execute(delta, time) {
+                this.queries.moving.results.forEach(entity => {
+                    var velocity = entity.getComponent(Velocity);
+                    var position = entity.getMutableComponent(Position);
+                    position.x += velocity.x * delta;
+                    position.y += velocity.y * delta;
+
+                    if (position.x > canvasWidth + SHAPE_HALF_SIZE) position.x = -SHAPE_HALF_SIZE;
+                    if (position.x < -SHAPE_HALF_SIZE) position.x = canvasWidth + SHAPE_HALF_SIZE;
+                    if (position.y > canvasHeight + SHAPE_HALF_SIZE) position.y = -SHAPE_HALF_SIZE;
+                    if (position.y < -SHAPE_HALF_SIZE) position.y = canvasHeight + SHAPE_HALF_SIZE;
+                });
+            }
+        }
+
+        MovableSystem.queries = {
+            moving: {
+                components: [Velocity, Position]
+            }
+        }
+
+        class RendererSystem extends System {
+            execute(delta, time) {
+
+                ctx.fillStyle = "#d4d4d4";
+                ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+
+                this.queries.renderables.results.forEach(entity => {
+                    var shape = entity.getComponent(Shape);
+                    var position = entity.getComponent(Position);
+                    if (shape.primitive === 'box') {
+                        this.drawBox(position);
+                    } else {
+                        this.drawCircle(position);
+                    }
+                });
+            }
+
+            drawCircle(position) {
+                ctx.beginPath();
+                ctx.arc(position.x, position.y, SHAPE_HALF_SIZE, 0, 2 * Math.PI, false);
+                ctx.fillStyle = "#39c495";
+                ctx.fill();
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = "#0b845b";
+                ctx.stroke();
+            }
+
+            drawBox(position) {
+                ctx.beginPath();
+                ctx.rect(position.x - SHAPE_HALF_SIZE, position.y - SHAPE_HALF_SIZE, SHAPE_SIZE, SHAPE_SIZE);
+                ctx.fillStyle = "#e2736e";
+                ctx.fill();
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = "#b74843";
+                ctx.stroke();
+            }
+        }
+
+        RendererSystem.queries = {
+            renderables: {components: [Renderable, Shape]}
+        }
+
+        var world = new World();
+        world
+            .registerComponent(Velocity)
+            .registerComponent(Position)
+            .registerComponent(Shape)
+            .registerComponent(Renderable)
+            .registerSystem(MovableSystem)
+            .registerSystem(RendererSystem);
+
+        function getRandomVelocity() {
+            return {
+                x: SPEED_MULTIPLIER * (2 * Math.random() - 1),
+                y: SPEED_MULTIPLIER * (2 * Math.random() - 1)
+            };
+        }
+
+        function getRandomPosition() {
+            return {
+                x: Math.random() * canvasWidth,
+                y: Math.random() * canvasHeight
+            };
+        }
+
+        function getRandomShape() {
+            return {
+                primitive: Math.random() >= 0.5 ? 'circle' : 'box'
+            };
+        }
+
+        canvas.addEventListener("click", (e) => {
+            let rect = canvas.getBoundingClientRect();
+            let x = event.clientX - rect.left;
+            let y = event.clientY - rect.top;
+            for (let i = 0; i < NUM_ELEMENTS; i++) {
+                world
+                    .createEntity()
+                    .addComponent(Velocity, getRandomVelocity())
+                    .addComponent(Shape, getRandomShape())
+                    .addComponent(Position, {x: x, y: y} )
+                    .addComponent(Renderable)
+            }
+        });
+
+        function run() {
+            var time = performance.now();
+            var delta = time - lastTime;
+
+            world.execute(delta, time);
+
+            lastTime = time;
+            requestAnimationFrame(run);
+        }
+
+        var lastTime = performance.now();
+        run();
+    </script>
+</head>
+<body>
+<canvas width="500" height="500"></canvas>
+</body>
+</html>
+
